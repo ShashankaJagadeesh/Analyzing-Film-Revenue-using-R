@@ -13,7 +13,7 @@ library(dplyr)
 
 colnames(imdb_movies)
 colnames(netflix_titles)
-colnames(disney_plus_movies)
+colnames(disney_plus_titles)
 
 disney_plus_movies <- filter(disney_plus_titles, type == "Movie")
 netflix_movies <- filter(netflix_titles, type == "Movie")
@@ -22,7 +22,6 @@ head(netflix_movies,15)
 
 library(dplyr)
 
-# Assuming disney_plus_movies and netflix_movies are already filtered to contain only movies
 
 # Add a new column to each dataset to indicate the source
 disney_plus_movies$source <- 'Disney+'
@@ -39,7 +38,6 @@ combined_movies_unique <- combined_movies %>%
 # Display the first 15 rows of the combined, unique movies dataset
 head(combined_movies_unique, 30)
 
-imdb_movies <- rename(imdb_movies, title = names)
 
 final_dataset <- merge(combined_movies_unique, imdb_movies, by = "title", all.x = TRUE)
 
@@ -55,7 +53,7 @@ write.csv(final_dataset, "C:/Users/PC/Documents/Assignments/R programming/Assign
 
 final_dataset <- select(final_dataset, -orig_title)
 final_dataset$title <- sapply(final_dataset$title, function(x) iconv(x, from = "UTF-8", to = "ASCII", sub = ""))
-
+final_dataset$genre <- sapply(final_dataset$genre, function(x) iconv(x, from = "UTF-8", to = "ASCII", sub = ""))
 
 
 
