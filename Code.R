@@ -3,13 +3,34 @@ install.packages("dplyr")
 
 library(readr)
 library(dplyr)
+library(tidyverse)
+library(mgcv)
+
+if (!require("tm")) install.packages("tm")
+if (!require("wordcloud")) install.packages("wordcloud")
+if (!require("RColorBrewer")) install.packages("RColorBrewer")
+
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(tm)
+
+library(tidyr)
+
+
+if (!require("leaflet")) install.packages("leaflet")
+if (!require("countrycode")) install.packages("countrycode")
+
+library(leaflet)
+library(countrycode)
+
+install.packages("plotly")
+library(plotly)
 
 disney_plus_titles <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/netflix_titles.csv", fileEncoding = "UTF-8")
 netflix_titles <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/disney_plus_titles.csv", fileEncoding = "UTF-8")
 imdb_movies <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/imdb_movies.csv", fileEncoding = "UTF-8")
 
-
-library(dplyr)
 
 colnames(imdb_movies)
 colnames(netflix_titles)
@@ -19,9 +40,6 @@ disney_plus_movies <- filter(disney_plus_titles, type == "Movie")
 netflix_movies <- filter(netflix_titles, type == "Movie")
 
 head(netflix_movies,15)
-
-library(dplyr)
-
 
 #new column to each dataset to indicate the source
 disney_plus_movies$source <- 'Disney+'
@@ -55,7 +73,6 @@ final_dataset <- select(final_dataset, -orig_title)
 final_dataset$title <- sapply(final_dataset$title, function(x) iconv(x, from = "UTF-8", to = "ASCII", sub = ""))
 final_dataset$genre <- sapply(final_dataset$genre, function(x) iconv(x, from = "UTF-8", to = "ASCII", sub = ""))
 
-library(tidyverse)
 
 final_dataset$budget_x[is.na(final_dataset$budget_x)] <- median(final_dataset$budget_x, na.rm = TRUE)
 final_dataset$revenue[is.na(final_dataset$revenue)] <- median(final_dataset$revenue, na.rm = TRUE)
@@ -63,32 +80,35 @@ final_dataset$revenue[is.na(final_dataset$revenue)] <- median(final_dataset$reve
 
 #----------GLM regression model-----------------
 
-summary(glm_model_simplified)
+library(stats)
 
 glm_model_no_genre <- glm(revenue ~ budget_x + release_year + score, 
                           data = final_dataset, 
                           family = gaussian())
 
+# Summary of the glm_model_no_genre
 summary(glm_model_no_genre)
+
 
 #---------------GAM regression model------------
 
+if (!require(mgcv, quietly = TRUE)) install.packages("mgcv")
+library(mgcv)
 
 
+gam_model <- gam(revenue ~ s(budget_x) + s(release_year) + s(score), 
+                 data = final_dataset, 
+                 family = gaussian())
 
 
-#-------- improving the model------
+# Check the summary of the model
+summary(gam_model)
 
-# Fit a GAM with an interaction term between budget_x and score
-gam_model_interaction <- gam(revenue ~ s(budget_x) + s(release_year) + s(score) + ti(budget_x, score),
-                             data = final_dataset, family = gaussian())
-
-summary(gam_model_interaction)
 
 #-------------2nd iteration-------------------------
 
 
-library(mgcv)
+
 gam_model_enhanced <- gam(revenue ~ s(log(budget_x)) + s(release_year) + s(score) + ti(log(budget_x), score),
                           data = final_dataset, family = gaussian(),
                           method = "REML")  # REML for smoothing parameter estimation
@@ -96,20 +116,12 @@ gam_model_enhanced <- gam(revenue ~ s(log(budget_x)) + s(release_year) + s(score
 summary(gam_model_enhanced)
 
 #Visualizing the effects of the predictors
-par(mfrow=c(3,1))  # Arrange plots in 3 rows and 1 column
-plot(gam_model_enhanced, pages=1)  # Plot the effects
+par(mfrow=c(3,1))
+plot(gam_model_enhanced, pages=1)
 
 
 #--------------qualitative analysis----------
 
-if (!require("tm")) install.packages("tm")
-if (!require("wordcloud")) install.packages("wordcloud")
-if (!require("RColorBrewer")) install.packages("RColorBrewer")
-
-library(tm)
-library(wordcloud)
-library(RColorBrewer)
-library(tm)
 
 text_corpus <- Corpus(VectorSource(final_dataset$overview))
 
@@ -155,8 +167,6 @@ wordcloud(words = top_20_words$word, freq = top_20_words$freq,
 
 #------------word association-----------------------------------
 
-if (!require("tm", quietly = TRUE)) install.packages("tm")
-library(tm)
 
 
 text_corpus <- Corpus(VectorSource(final_dataset$overview))
@@ -179,10 +189,6 @@ print(associations)
 
 #-----------------Visualisation-------------------------------------------
 
-install.packages("plotly")
-
-library(plotly)
-
 # Data
 terms <- c("laura", "acclaimed", "thirtyyearold", "unapologetic", "void",
            "iterations", "laura’s", "andrea", "exploring", "desires",
@@ -204,17 +210,6 @@ fig
 
 #------------------ Geographical---------------
 
-if (!require("leaflet")) install.packages("leaflet")
-if (!require("dplyr")) install.packages("dplyr")
-if (!require("countrycode")) install.packages("countrycode")
-
-library(leaflet)
-library(dplyr)
-library(countrycode)
-library(readr)
-
-if (!require("countrycode", quietly = TRUE)) install.packages("countrycode")
-library(countrycode)
 
 # Convert ISO country codes to country names
 final_dataset$country_name <- countrycode(final_dataset$country.y, "iso2c", "country.name")
@@ -281,9 +276,6 @@ leaflet(data = final_dataset) %>%
           lat = mean(final_dataset$lat, na.rm = TRUE), 
           zoom = 2)
 
-if (!require("leaflet")) install.packages("leaflet")
-library(leaflet)
-
 
 #Heatmap
 install.packages("leaflet.extras")
@@ -298,8 +290,6 @@ leaflet(data = final_dataset) %>%
 
 #----------------insights---------------------------
 
-library(plotly)
-library(dplyr)
 
 # Sum revenue by country
 revenue_by_country <- final_dataset %>%
@@ -312,7 +302,6 @@ plot_ly(data = revenue_by_country, x = ~country.y, y = ~total_revenue, type = 'b
          xaxis = list(title = 'Country'),
          yaxis = list(title = 'Total Revenue'))
 
-library(tidyr)
 genre_counts <- final_dataset %>%
   separate_rows(genre, sep = ",") %>%
   count(genre, sort = TRUE)
