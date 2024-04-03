@@ -1,0 +1,564 @@
+---
+title: "R Assignment3"
+format: html
+editor: visual
+code-fold: true
+---
+
+## Libraries
+
+The below code chunk is used to install and load the necessary R packages for data manipulation, visualization, and analysis. It ensures that all required libraries are available for use in the subsequent analyses.
+
+```{r message=FALSE, warning=FALSE, results='asis'}
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+if (!require("tm", quietly = TRUE)) install.packages("tm", quiet = TRUE)
+if (!require("wordcloud", quietly = TRUE)) install.packages("wordcloud", quiet = TRUE)
+if (!require("RColorBrewer", quietly = TRUE)) install.packages("RColorBrewer", quiet = TRUE)
+if (!require("leaflet", quietly = TRUE)) install.packages("leaflet", quiet = TRUE)
+if (!require("countrycode", quietly = TRUE)) install.packages("countrycode", quiet = TRUE)
+if (!require("mgcv", quietly = TRUE)) install.packages("mgcv", quiet = TRUE)
+if (!require("maps", quietly = TRUE)) install.packages("maps", quiet = TRUE)
+if (!require("ggplot2", quietly = TRUE)) install.packages("ggplot2", quiet)
+install.packages(c("readr", "corrplot", "reshape2", "gbm", "randomForest"))
+
+
+
+library(ggplot2)
+library(maps)
+library(randomForest)
+library(caret)
+library(gbm)
+library(mgcv)
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(mgcv)
+library(corrplot)
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(tidyr)
+library(leaflet)
+library(countrycode)
+library(plotly)
+library(reshape2)
+library(stats)
+```
+
+## Adding all datasets
+
+Here, datasets are loaded into R from the specified paths. Each dataset corresponds to a different source of movie titles.
+
+```{r}
+disney_plus_titles <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/netflix_titles.csv", fileEncoding = "UTF-8")
+netflix_titles <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/disney_plus_titles.csv", fileEncoding = "UTF-8")
+imdb_movies <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/imdb_movies.csv", fileEncoding = "UTF-8")
+
+```
+
+## Mermaid
+
+This Mermaid diagram provides a visual flowchart of how the datasets will be merged. It outlines the keys and columns in each dataset, leading to the formation of the final dataset.
+
+```{mermaid}
+graph TD;
+    classDef dataset fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef process fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef final fill:#bfb,stroke:#333,stroke-width:4px;
+
+    A("Netflix Titles\n- Key: title\n- Columns: year, genre, rating");
+    B("Disney Plus Titles\n- Key: title\n- Columns: release_date, category, audience_score");
+    D("IMDb Movies\n- Key: title\n- Columns: director, runtime, votes");
+
+    C["Merging Process\n---\nKey: title"];
+    E("final_dataset\n- Key: title\n- Merged Columns: title, year/release_date, genre/category, rating/audience_score, director, runtime, votes");
+
+    A --> C;
+    B --> C;
+    D --> C;
+    C --> E;
+
+    class A,B,D dataset;
+    class C process;
+    class E final;
+
+
+```
+
+## Merging datasets
+
+The following code filters movies from the titles datasets, adds a source identifier, combines them, and merges them with the IMDb movies dataset. The resulting **`final_dataset`** is then cleaned and prepped for analysis.
+
+```{r, echo=TRUE}
+disney_plus_movies <- filter(disney_plus_titles, type == "Movie")
+netflix_movies <- filter(netflix_titles, type == "Movie")
+
+#new column to each dataset to indicate the source
+disney_plus_movies$source <- 'Disney+'
+netflix_movies$source <- 'Netflix'
+
+# Combining the two datasets
+combined_movies <- bind_rows(disney_plus_movies, netflix_movies)
+
+# Removing duplicate movie titles, keeping the first occurrence
+combined_movies_unique <- combined_movies %>%
+  distinct(title, .keep_all = TRUE)
+
+final_dataset <- merge(combined_movies_unique, imdb_movies, by = "title", all.x = TRUE)
+
+final_dataset <- na.omit(final_dataset)
+
+final_dataset$example_column[is.na(final_dataset$example_column)] <- median(final_dataset$example_column, na.rm = TRUE)
+
+final_dataset <- unique(final_dataset)
+
+#write.csv(final_dataset, "C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/final_dataset1.csv", row.names = FALSE)
+
+final_dataset <- select(final_dataset, -orig_title)
+#final_dataset <- select(final_dataset, -overview)
+final_dataset$title <- sapply(final_dataset$title, function(x) iconv(x, from = "UTF-8", to = "ASCII", sub = ""))
+final_dataset$genre <- sapply(final_dataset$genre, function(x) iconv(x, from = "UTF-8", to = "ASCII", sub = ""))
+
+
+final_dataset$budget_x[is.na(final_dataset$budget_x)] <- median(final_dataset$budget_x, na.rm = TRUE)
+final_dataset$revenue[is.na(final_dataset$revenue)] <- median(final_dataset$revenue, na.rm = TRUE)
+
+head(final_dataset,5)
+
+```
+
+## Checking correlation before analysis
+
+This section creates a correlation matrix to understand the linear relationships between numerical variables. A heatmap is plotted to visualize these relationships, aiding in the assessment of potential predictor variables for the upcoming models.
+
+```{r}
+#Selecting only numerical columns for the correlation matrix
+numerical_data <- final_dataset[, c("release_year", "budget_x", "revenue", "score")]
+
+# Calculate the correlation matrix
+cor_matrix <- cor(numerical_data, use = "pairwise.complete.obs")  # Handles missing values
+
+# Melt the correlation matrix for use with ggplot
+melted_cor_matrix <- melt(cor_matrix)
+
+# Plotting the heatmap
+ggplot(melted_cor_matrix, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1),
+        axis.text.y = element_text(size = 12)) +
+  labs(x = '', y = '', title = 'Heatmap of Correlation Matrix') +
+  coord_fixed()
+
+cor_matrix <- cor(final_dataset[, c("release_year", "budget_x", "revenue", "score")], 
+                  use = "complete.obs")
+
+# Optionally, round the correlation matrix for easier viewing
+cor_matrix_rounded <- round(cor_matrix, 2)
+
+# Print the rounded correlation matrix
+print(cor_matrix_rounded)
+
+cor_matrix_df <- as.data.frame(cor_matrix_rounded)
+
+# View the data frame
+View(cor_matrix_df)
+
+```
+
+The correlation coefficients between revenue and the predictor variables (budget, release year, and score) are relatively low. This suggests that there may not be strong linear relationships between these variables. However, correlation analysis only assesses linear relationships, and it's possible that nonlinear relationships exist.
+
+## Quantitative Analysis
+
+### GLM Regression model
+
+Generalized Linear Models (GLM) are fitted to capture potential nonlinear relationships between the response variable (revenue) and predictors. The summary and predictions provide insight into the model's performance.
+
+```{r}
+
+set.seed(123) # for reproducibility
+index <- createDataPartition(final_dataset$revenue, p = 0.7, list = FALSE)
+train_data <- final_dataset[index, ]
+test_data <- final_dataset[-index, ]
+
+# Fit the GLM model on the training data
+glm_model_no_genre <- glm(revenue ~ budget_x + release_year + score, 
+                          data = train_data, 
+                          family = gaussian())
+
+# Summary of the GLM model
+summary(glm_model_no_genre)
+
+# Predict on the test data
+predictions <- predict(glm_model_no_genre, newdata = test_data, type = "response")
+
+# Evaluate the model performance
+# For regression, common metrics include RMSE (Root Mean Square Error) and R-squared
+test_data$predicted_revenue <- predictions
+rmse <- sqrt(mean((test_data$revenue - test_data$predicted_revenue)^2))
+cat("RMSE:", rmse, "\n")
+
+# Alternatively, use caret's postResample to get RMSE and R-squared
+postResample(pred = predictions, obs = test_data$revenue)
+
+```
+
+The model's RMSE (Root Mean Square Error) is quite high, which might indicate that the model's predictions are not very close to the actual values on average, potentially due to the high variance of movie revenues. The **`R-squared`** value is approximately **`0.565`**, which means that around 56.5% of the variability in revenue is explained by the model.
+
+### GAM Regression model
+
+While GAMs offer flexibility, they also provide interpretability. The summary output of the GAM model will show the estimated smooth functions for each predictor variable, allowing you to understand how each variable influences the response (revenue) nonlinearly. GAM allows for the modeling of nonlinear relationships through smooth functions, which can capture more complex relationships between variables.
+
+```{r}
+
+
+set.seed(123) # for reproducibility
+index <- createDataPartition(final_dataset$revenue, p = 0.7, list = FALSE)
+train_data <- final_dataset[index, ]
+test_data <- final_dataset[-index, ]
+
+# Fit the GAM model on the training data
+gam_model <- gam(revenue ~ s(budget_x) + s(release_year) + s(score), 
+                 data = train_data, 
+                 family = gaussian())
+
+# Summary of the GAM model
+summary(gam_model)
+
+# Predict on the test data
+predictions <- predict(gam_model, newdata = test_data)
+
+# Evaluate the model performance
+# For regression, common metrics include RMSE (Root Mean Square Error) and R-squared
+test_data$predicted_revenue <- predictions
+rmse <- sqrt(mean((test_data$revenue - test_data$predicted_revenue)^2))
+cat("RMSE:", rmse, "\n")
+
+# Alternatively, use caret's postResample to get RMSE and R-squared
+postResample(pred = predictions, obs = test_data$revenue)
+```
+
+The significance of the smooth terms for **`budget_x`** and **`score`** indicates that these variables have important nonlinear effects on revenue, which the GAM is capturing. The model's predictive performance is reasonable, but as with many real-world scenarios, there is room for improvement, likely due to the complex factors driving movie revenues beyond what's captured in the model.
+
+### 2nd Iteration
+
+By enhancing the model with additional terms, such as interaction terms (ti()) between variables like log(budget_x) and score, it is aimed to refine the model's ability to explain the variation in revenue. Introducing a logarithmic transformation (log(budget_x)) might address potential nonlinear relationships between budget and revenue, especially if there's a diminishing return effect where larger budgets don't necessarily lead to proportionally higher revenues. Similarly, including an interaction term between log(budget_x) and score (ti(log(budget_x), score)) allows the model to capture how the effect of budget on revenue might vary based on the score.
+
+```{r}
+gam_model_enhanced <- gam(revenue ~ s(log(budget_x)) + s(release_year) + s(score) + ti(log(budget_x), score),
+                          data = train_data, family = gaussian(),
+                          method = "REML")
+
+# Summary of the enhanced GAM model
+summary(gam_model_enhanced)
+
+# Predict on the test data
+predictions_enhanced <- predict(gam_model_enhanced, newdata = test_data)
+
+# Evaluate the model performance on the test data
+test_data$predicted_revenue_enhanced <- predictions_enhanced
+rmse_enhanced <- sqrt(mean((test_data$revenue - test_data$predicted_revenue_enhanced)^2))
+cat("Enhanced Model RMSE:", rmse_enhanced, "\n")
+
+# Visualizing the effects of the predictors (using the training data model fit)
+par(mfrow=c(3,1))
+plot(gam_model_enhanced, pages=1)
+```
+
+The second iteration of the GAM has improved the model's explanatory power and predictive accuracy. The inclusion of logged budget values and an interaction term appears to provide a more nuanced understanding of how budget and score together influence movie revenue.
+
+### Random forest
+
+```{r}
+set.seed(123) # for reproducibility
+index <- createDataPartition(final_dataset$revenue, p = 0.7, list = FALSE)
+train_data <- final_dataset[index, ]
+test_data <- final_dataset[-index, ]
+
+# Fit the Random Forest model on the training data
+rf_model <- randomForest(revenue ~ budget_x + release_year + score, 
+                         data = train_data,
+                         ntree = 500,
+                         importance = TRUE)
+
+# Summarize the model
+print(rf_model)
+
+# Variable importance
+var_imp <- importance(rf_model)
+print(var_imp)
+
+# Predict on the test data
+predictions <- predict(rf_model, newdata = test_data)
+
+# Evaluate the model performance on the test data
+test_data$predicted_revenue <- predictions
+rmse_rf <- sqrt(mean((test_data$revenue - test_data$predicted_revenue)^2))
+cat("Random Forest Model RMSE:", rmse_rf, "\n")
+
+
+# You may need to calculate the residuals for each movie
+test_data$residuals <- test_data$revenue - test_data$predicted_revenue
+
+# Aggregate residuals by release year
+aggregate_resid <- aggregate(residuals ~ release_year, data = test_data, FUN = mean)
+
+# Create a data frame for aggregate residuals
+aggregate_resid_df <- as.data.frame(aggregate_resid)
+
+
+# Creating an interactive plot using plotly
+interactive_plot <- plot_ly(data = aggregate_resid_df, x = ~release_year, y = ~residuals, type = 'scatter', mode = 'lines+markers') %>%
+  layout(title = "Average Residuals by Release Year",
+         xaxis = list(title = "Release Year"),
+         yaxis = list(title = "Average Residuals"))
+
+# Display the plot
+interactive_plot
+```
+
+The Random Forest model is a robust predictor of revenue with budget being the strongest predictor among the variables used. The variance explained by the model is quite high for such a complex target variable as movie revenue, but the large RMSE indicates that there is still considerable error in the predictions, which is not uncommon in predicting financial figures due to their high variability and influence by many factors not captured in the model.
+
+## Classification
+
+This section demonstrates how to convert a continuous variable into a binary classification and then build a Random Forest classification model to predict these classes.
+
+```{r}
+# Convert revenue to a binary variable
+median_revenue <- median(final_dataset$revenue, na.rm = TRUE)
+final_dataset$revenue_class <- ifelse(final_dataset$revenue > median_revenue, "High", "Low")
+
+set.seed(123)
+
+# Splitting the dataset into training and testing sets
+splitIndex <- createDataPartition(final_dataset$revenue_class, p = .8, list = FALSE, times = 1)
+train_data <- final_dataset[splitIndex, ]
+test_data <- final_dataset[-splitIndex, ]
+
+# Prepare training control
+fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE, summaryFunction = twoClassSummary)
+
+# Train the model using only the training set
+rf_model <- train(revenue_class ~ budget_x + release_year + score + orig_lang,
+                  data = train_data,
+                  method = "rf",
+                  trControl = fitControl,
+                  metric = "ROC")
+
+# Model Summary
+print(rf_model)
+```
+
+Random Forest classification model demonstrates good performance in distinguishing between the two revenue classes. The ROC value is quite high, suggesting that the model has a strong ability to discriminate between 'High' and 'Low' revenue movies. However, there is a trade-off between sensitivity and specificity as **`mtry`** changes, which is common in classification tasks. The model performs better at identifying 'High' revenue movies (as indicated by higher sensitivity) when **`mtry`** is set to 13.
+
+## Qualitative analysis
+
+### wordcloud
+
+A word cloud is generated to visualize the most common words in the **`overview`** column of the dataset. This qualitative analysis can give insights into prevalent themes or topics.
+
+```{r warning=FALSE}
+corpus <- Corpus(VectorSource(final_dataset$overview))
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stripWhitespace)
+
+# Build a term-document matrix
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+word_freqs <- sort(rowSums(m), decreasing = TRUE)
+word_freqs_df <- data.frame(word = names(word_freqs), freq = word_freqs)
+
+set.seed(1234)
+wordcloud(words = word_freqs_df$word, freq = word_freqs_df$freq, min.freq = 1,
+          max.words = 100, random.order = FALSE, rot.per = 0.35, 
+          colors = brewer.pal(8, "Dark2"), main = "Most Common Words in Movie Overviews")
+```
+
+### How do budget, critical scores, and thematic elements within movie overviews influence a film's revenue, and what insights can this provide to filmmakers and marketers for optimizing financial success?
+
+```{r}
+# Ensure 'overview' is treated as character data
+analysis_dataset <- final_dataset[, c("revenue", "budget_x", "release_year", "score", "overview")]
+
+# Convert 'overview' to character data in the new dataset
+analysis_dataset$overview <- as.character(analysis_dataset$overview)
+
+# Create indicator variables for the presence of keywords "young", "life", "new" in the new dataset
+keywords <- c("young", "life", "new")
+for(keyword in keywords) {
+  analysis_dataset[[keyword]] <- as.numeric(grepl(keyword, analysis_dataset$overview, ignore.case = TRUE))
+}
+
+# Remove rows with NA in any of the model variables in the new dataset
+analysis_dataset <- na.omit(analysis_dataset)
+
+
+# Full model with "young", "life", "new" in the new dataset
+full_model_analysis <- lm(revenue ~ budget_x + release_year + score + young + life + new, data = analysis_dataset)
+summary(full_model_analysis)
+
+```
+
+The analysis underscores the critical roles that a movie's budget and critical scores play in determining its revenue, confirming the intuitive expectation that films with higher budgets and superior scores—likely indicative of better quality or more favorable reviews—tend to achieve greater financial success. However, the investigation into the thematic elements, as denoted by the keywords "young," "life," and "new," reveals a lack of statistical significance, suggesting these specific terms do not directly impact movie revenue when budget, release year, and score are accounted for. This finding posits that the themes suggested by these words may not be potent determinants of a movie's financial outcome, or their effects might be moderated by other unexamined variables.
+
+### word association
+
+Associations between the term "life" and other words in the **`overview`** are examined. A bar chart is then created to visualize the strength of these associations.
+
+```{r warning=FALSE}
+text_corpus <- Corpus(VectorSource(final_dataset$overview))
+
+
+text_corpus <- tm_map(text_corpus, content_transformer(tolower)) # Convert to lowercase
+text_corpus <- tm_map(text_corpus, removePunctuation)            # Remove punctuation
+text_corpus <- tm_map(text_corpus, removeNumbers)                # Remove numbers
+text_corpus <- tm_map(text_corpus, removeWords, stopwords("english")) # Remove stopwords
+text_corpus <- tm_map(text_corpus, stripWhitespace)              # Remove extra white spaces
+
+
+tdm <- TermDocumentMatrix(text_corpus)
+
+associations <- findAssocs(tdm, "life", 0.25) 
+
+print(associations)
+
+#-----------------Visualisation-------------------------------------------
+
+# Data
+terms <- c("laura", "acclaimed", "thirtyyearold", "unapologetic", "void",
+           "iterations", "laura’s", "andrea", "exploring", "desires",
+           "fredricksen", "persistent", "deepest", "horribly", "realities",
+           "everyday", "womanizer", "lease", "fullest", "longs", "many")
+
+values <- c(0.28, 0.27, 0.27, 0.27, 0.27, 0.27, 0.26, 0.25, 0.23, 0.22,
+            0.21, 0.21, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.17, 0.16)
+
+# bar chart
+fig <- plot_ly(x = ~terms, y = ~values, type = 'bar', marker = list(color = 'indianred'))
+fig <- fig %>% layout(title = 'Term Frequencies in $life Theme',
+                      xaxis = list(title = 'Terms', tickangle = -45),
+                      yaxis = list(title = 'Frequency'),
+                      template = 'plotly_white')
+
+fig
+```
+
+## Geographical
+
+Geospatial analysis is performed to visualize the data on a world map. Two types of visualizations are created: a heatmap and cluster markers, both providing geographical insights into the dataset.
+
+```{r warning=FALSE}
+# Convert ISO country codes to country names
+final_dataset$country_name <- countrycode(final_dataset$country.y, "iso2c", "country.name")
+
+# world map data, which includes lat/lon for country centers
+world_map <- map_data("world")
+
+# unique list of countries with their mean latitude and longitude
+country_coords <- world_map %>%
+  group_by(region) %>%
+  summarize(lat = mean(lat), lon = mean(long), .groups = 'drop')
+
+
+# Merge the coordinates
+final_dataset <- merge(final_dataset, country_coords, by.x = "country_name", by.y = "region", all.x = TRUE)
+
+na_count_country_name <- sum(is.na(final_dataset$country_name))
+cat("Number of NA values in country_name column:", na_count_country_name, "\n")
+na_count_country_code <- sum(is.na(final_dataset$country.y))
+cat("Number of NA values in country.y column:", na_count_country_code, "\n")
+
+invalid_rows <- which(is.na(final_dataset$lat) | is.na(final_dataset$lon) |
+                        !is.numeric(final_dataset$lat) | !is.numeric(final_dataset$lon))
+
+final_dataset <- final_dataset %>%
+  mutate(
+    lat = ifelse(country.y == "US", 37.0902, lat),
+    lon = ifelse(country.y == "US", -95.7129, lon),
+    lat = ifelse(country.y == "GB", 55.3781, lat),
+    lon = ifelse(country.y == "GB", -3.4360, lon),
+    lat = ifelse(country.y == "HK", 22.3193, lat),
+    lon = ifelse(country.y == "HK", 114.1694, lon)
+  )
+
+#Heatmap
+install.packages("leaflet.extras")
+library("leaflet.extras")
+leaflet(data = final_dataset) %>%
+  addTiles() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addHeatmap(lng = ~lon, lat = ~lat, intensity = ~1, radius = 20, blur = 15) %>%
+  setView(lng = mean(final_dataset$lon, na.rm = TRUE), 
+          lat = mean(final_dataset$lat, na.rm = TRUE), 
+          zoom = 2)
+
+#Cluster Markers
+leaflet(data = final_dataset) %>%
+  addTiles() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(lng = ~lon, lat = ~lat, popup = ~country_name, 
+                   clusterOptions = markerClusterOptions()) %>%
+  setView(lng = mean(final_dataset$lon, na.rm = TRUE), 
+          lat = mean(final_dataset$lat, na.rm = TRUE), 
+          zoom = 2)
+```
+
+## Insights
+
+Visualizations are created to glean insights from the **`final_dataset`**. These include interactive plots for revenue by country, distribution of shows by genre, average scores by original language, and a scatter plot of budget versus revenue.
+
+```{r}
+
+# Sum revenue by country
+revenue_by_country <- final_dataset %>%
+  group_by(country_name) %>%
+  summarise(total_revenue = sum(revenue, na.rm = TRUE))
+
+# Using a logarithmic scale on the y-axis 
+interactive_plot <- plot_ly(data = revenue_by_country, x = ~country_name, y = ~total_revenue, type = 'bar',
+                            marker = list(color = ~total_revenue, colorscale = 'Jet')) %>%
+  layout(title = 'Total Revenue by Country (Log Scale)',
+         xaxis = list(title = 'Country'),
+         yaxis = list(title = 'Total Revenue (Log Scale)', type = 'log'))
+interactive_plot
+
+#Shows by Genre
+genre_counts <- final_dataset %>%
+  separate_rows(genre, sep = ",") %>%
+  count(genre, sort = TRUE)
+  
+interactive_bar_chart <- plot_ly(data = genre_counts, x = ~genre, y = ~n, type = 'bar', marker = list(color = 'rgba(55, 128, 191, 0.7)')) %>%
+  layout(title = 'Distribution of Shows by Genre',
+         xaxis = list(title = 'Genre'),
+         yaxis = list(title = 'Count'))
+
+interactive_bar_chart
+
+#  interactive pie chart of shows by Genre
+plot_ly(data = genre_counts, labels = ~genre, values = ~n, type = 'pie') %>%
+  layout(title = 'Distribution of Shows by Genre')
+
+# avg score by language
+avg_score_by_lang <- final_dataset %>%
+  group_by(orig_lang) %>%
+  summarise(average_score = mean(score, na.rm = TRUE))
+
+# plot
+plot_ly(data = avg_score_by_lang, x = ~orig_lang, y = ~average_score, type = 'scatter', mode = 'markers+lines') %>%
+  layout(title = 'Average Score by Original Language',
+         xaxis = list(title = 'Original Language'),
+         yaxis = list(title = 'Average Score'))
+
+
+#scatter plot Budget vs Revenue
+plot_ly(data = final_dataset, x = ~budget_x, y = ~revenue, type = 'scatter', mode = 'markers') %>%
+  layout(title = 'Budget vs. Revenue',
+         xaxis = list(title = 'Budget'),
+         yaxis = list(title = 'Revenue'))
+```
