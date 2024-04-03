@@ -1,8 +1,14 @@
 ---
-title: "R Assignment3"
-format: html
+title: "R Assignment 3"
+author: "Shashanka Jagadeesh: 23101892"
+format:
+  html:
+    toc: true
+    html-math-method: katex
+    css: styles.css
 editor: visual
 code-fold: true
+theme: cyborg
 ---
 
 ## Libraries
@@ -45,7 +51,7 @@ library(reshape2)
 library(stats)
 ```
 
-## Adding all datasets
+## Loading all datasets
 
 Here, datasets are loaded into R from the specified paths. Each dataset corresponds to a different source of movie titles.
 
@@ -62,16 +68,16 @@ This Mermaid diagram provides a visual flowchart of how the datasets will be mer
 
 ```{mermaid}
 graph TD;
-    classDef dataset fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef process fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef final fill:#bfb,stroke:#333,stroke-width:4px;
+      classDef dataset fill:#007bff,stroke:#333,stroke-width:2px,color:#000;
+      classDef process fill:#28a745,stroke:#333,stroke-width:2px,color:#000;
+      classDef final fill:#dc3545,stroke:#333,stroke-width:4px,color:#000;
 
-    A("Netflix Titles\n- Key: title\n- Columns: year, genre, rating");
-    B("Disney Plus Titles\n- Key: title\n- Columns: release_date, category, audience_score");
-    D("IMDb Movies\n- Key: title\n- Columns: director, runtime, votes");
+    A("Netflix Titles\n- Key: title\n- Columns: type,title,director,cast");
+    B("Disney Plus Titles\n- Key: title\n- Columns: type,title,director,cast");
+    D("IMDb Movies\n- Key: title\n- Columns: title,score,genre,overview");
 
     C["Merging Process\n---\nKey: title"];
-    E("final_dataset\n- Key: title\n- Merged Columns: title, year/release_date, genre/category, rating/audience_score, director, runtime, votes");
+    E("final_dataset\n- Key: title\n- Merged Columns: type,title,director,cast,score,genre,overview");
 
     A --> C;
     B --> C;
@@ -93,14 +99,13 @@ The following code filters movies from the titles datasets, adds a source identi
 disney_plus_movies <- filter(disney_plus_titles, type == "Movie")
 netflix_movies <- filter(netflix_titles, type == "Movie")
 
-#new column to each dataset to indicate the source
 disney_plus_movies$source <- 'Disney+'
 netflix_movies$source <- 'Netflix'
 
 # Combining the two datasets
 combined_movies <- bind_rows(disney_plus_movies, netflix_movies)
 
-# Removing duplicate movie titles, keeping the first occurrence
+# Removing duplicate movie titles
 combined_movies_unique <- combined_movies %>%
   distinct(title, .keep_all = TRUE)
 
@@ -184,7 +189,7 @@ index <- createDataPartition(final_dataset$revenue, p = 0.7, list = FALSE)
 train_data <- final_dataset[index, ]
 test_data <- final_dataset[-index, ]
 
-# Fit the GLM model on the training data
+# training data
 glm_model_no_genre <- glm(revenue ~ budget_x + release_year + score, 
                           data = train_data, 
                           family = gaussian())
@@ -192,25 +197,26 @@ glm_model_no_genre <- glm(revenue ~ budget_x + release_year + score,
 # Summary of the GLM model
 summary(glm_model_no_genre)
 
-# Predict on the test data
+
 predictions <- predict(glm_model_no_genre, newdata = test_data, type = "response")
 
 # Evaluate the model performance
-# For regression, common metrics include RMSE (Root Mean Square Error) and R-squared
 test_data$predicted_revenue <- predictions
 rmse <- sqrt(mean((test_data$revenue - test_data$predicted_revenue)^2))
 cat("RMSE:", rmse, "\n")
 
-# Alternatively, use caret's postResample to get RMSE and R-squared
 postResample(pred = predictions, obs = test_data$revenue)
 
+glm_metrics <- postResample(pred = predictions, obs = test_data$revenue)
+rmse_glm <- glm_metrics[1]
+rsq_glm <- glm_metrics[2]
 ```
 
 The model's RMSE (Root Mean Square Error) is quite high, which might indicate that the model's predictions are not very close to the actual values on average, potentially due to the high variance of movie revenues. The **`R-squared`** value is approximately **`0.565`**, which means that around 56.5% of the variability in revenue is explained by the model.
 
 ### GAM Regression model
 
-While GAMs offer flexibility, they also provide interpretability. The summary output of the GAM model will show the estimated smooth functions for each predictor variable, allowing you to understand how each variable influences the response (revenue) nonlinearly. GAM allows for the modeling of nonlinear relationships through smooth functions, which can capture more complex relationships between variables.
+While GAMs offer flexibility, they also provide interpretability. The summary output of the GAM model will show the estimated smooth functions for each predictor variable, allowing to understand how each variable influences the response (revenue) nonlinearly. GAM allows for the modeling of nonlinear relationships through smooth functions, which can capture more complex relationships between variables.
 
 ```{r}
 
@@ -232,13 +238,15 @@ summary(gam_model)
 predictions <- predict(gam_model, newdata = test_data)
 
 # Evaluate the model performance
-# For regression, common metrics include RMSE (Root Mean Square Error) and R-squared
 test_data$predicted_revenue <- predictions
 rmse <- sqrt(mean((test_data$revenue - test_data$predicted_revenue)^2))
 cat("RMSE:", rmse, "\n")
 
-# Alternatively, use caret's postResample to get RMSE and R-squared
 postResample(pred = predictions, obs = test_data$revenue)
+
+gam_metrics <- postResample(pred = predictions, obs = test_data$revenue)
+rmse_gam <- gam_metrics[1]
+rsq_gam <- gam_metrics[2]
 ```
 
 The significance of the smooth terms for **`budget_x`** and **`score`** indicates that these variables have important nonlinear effects on revenue, which the GAM is capturing. The model's predictive performance is reasonable, but as with many real-world scenarios, there is room for improvement, likely due to the complex factors driving movie revenues beyond what's captured in the model.
@@ -266,11 +274,17 @@ cat("Enhanced Model RMSE:", rmse_enhanced, "\n")
 # Visualizing the effects of the predictors (using the training data model fit)
 par(mfrow=c(3,1))
 plot(gam_model_enhanced, pages=1)
+
+gam_enhanced_metrics <- postResample(pred = predictions_enhanced, obs = test_data$revenue)
+rmse_gam_enhanced <- gam_enhanced_metrics[1]
+rsq_gam_enhanced <- gam_enhanced_metrics[2]
 ```
 
-The second iteration of the GAM has improved the model's explanatory power and predictive accuracy. The inclusion of logged budget values and an interaction term appears to provide a more nuanced understanding of how budget and score together influence movie revenue.
+The second iteration of the GAM has improved the model's explanatory power and predictive accuracy. The inclusion of logged budget values and an interaction term appears to provide a better understanding of how budget and score together influence movie revenue.
 
 ### Random forest
+
+A Random Forest model is built to predict revenue. Random Forest is a robust machine learning method that can capture complex interactions between variables.
 
 ```{r}
 set.seed(123) # for reproducibility
@@ -318,11 +332,15 @@ interactive_plot <- plot_ly(data = aggregate_resid_df, x = ~release_year, y = ~r
 
 # Display the plot
 interactive_plot
+
+rf_metrics <- postResample(pred = predictions, obs = test_data$revenue)
+rmse_rf <- rf_metrics[1]
+rsq_rf <- rf_metrics[2]
 ```
 
-The Random Forest model is a robust predictor of revenue with budget being the strongest predictor among the variables used. The variance explained by the model is quite high for such a complex target variable as movie revenue, but the large RMSE indicates that there is still considerable error in the predictions, which is not uncommon in predicting financial figures due to their high variability and influence by many factors not captured in the model.
+From this we see that budget is the strongest predictor among the variables used. The variance explained by the model is quite high for such a complex target variable as movie revenue, but the large RMSE indicates that there is still considerable error in the predictions, which is not uncommon in predicting financial figures due to their high variability and influence by many factors not captured in the model.
 
-## Classification
+## Classification and Confusion Matrix
 
 This section demonstrates how to convert a continuous variable into a binary classification and then build a Random Forest classification model to predict these classes.
 
@@ -350,13 +368,33 @@ rf_model <- train(revenue_class ~ budget_x + release_year + score + orig_lang,
 
 # Model Summary
 print(rf_model)
+
+predictions <- predict(rf_model, newdata = test_data)
+predictions_factor <- factor(predictions, levels = c("Low", "High"))
+actual_factor <- factor(test_data$revenue_class, levels = c("Low", "High"))
+
+confMatrix <- confusionMatrix(predictions_factor, actual_factor)
+print(confMatrix)
+
+
 ```
 
 Random Forest classification model demonstrates good performance in distinguishing between the two revenue classes. The ROC value is quite high, suggesting that the model has a strong ability to discriminate between 'High' and 'Low' revenue movies. However, there is a trade-off between sensitivity and specificity as **`mtry`** changes, which is common in classification tasks. The model performs better at identifying 'High' revenue movies (as indicated by higher sensitivity) when **`mtry`** is set to 13.
 
+```{r}
+# summary table
+accuracy_summary <- data.frame(
+  Model = c("GLM", "GAM", "GAM 2nd Iteration", "Random Forest"),
+  RMSE = c(rmse_glm, rmse_gam, rmse_gam_enhanced, rmse_rf),
+  R_Squared = c(rsq_glm, rsq_gam, rsq_gam_enhanced, rsq_rf)
+)
+
+print(accuracy_summary)
+```
+
 ## Qualitative analysis
 
-### wordcloud
+### Wordcloud
 
 A word cloud is generated to visualize the most common words in the **`overview`** column of the dataset. This qualitative analysis can give insights into prevalent themes or topics.
 
@@ -383,10 +421,8 @@ wordcloud(words = word_freqs_df$word, freq = word_freqs_df$freq, min.freq = 1,
 ### How do budget, critical scores, and thematic elements within movie overviews influence a film's revenue, and what insights can this provide to filmmakers and marketers for optimizing financial success?
 
 ```{r}
-# Ensure 'overview' is treated as character data
 analysis_dataset <- final_dataset[, c("revenue", "budget_x", "release_year", "score", "overview")]
 
-# Convert 'overview' to character data in the new dataset
 analysis_dataset$overview <- as.character(analysis_dataset$overview)
 
 # Create indicator variables for the presence of keywords "young", "life", "new" in the new dataset
@@ -395,19 +431,18 @@ for(keyword in keywords) {
   analysis_dataset[[keyword]] <- as.numeric(grepl(keyword, analysis_dataset$overview, ignore.case = TRUE))
 }
 
-# Remove rows with NA in any of the model variables in the new dataset
+# Remove rows with NA 
 analysis_dataset <- na.omit(analysis_dataset)
 
 
-# Full model with "young", "life", "new" in the new dataset
 full_model_analysis <- lm(revenue ~ budget_x + release_year + score + young + life + new, data = analysis_dataset)
 summary(full_model_analysis)
 
 ```
 
-The analysis underscores the critical roles that a movie's budget and critical scores play in determining its revenue, confirming the intuitive expectation that films with higher budgets and superior scores—likely indicative of better quality or more favorable reviews—tend to achieve greater financial success. However, the investigation into the thematic elements, as denoted by the keywords "young," "life," and "new," reveals a lack of statistical significance, suggesting these specific terms do not directly impact movie revenue when budget, release year, and score are accounted for. This finding posits that the themes suggested by these words may not be potent determinants of a movie's financial outcome, or their effects might be moderated by other unexamined variables.
+The analysis underscores the critical roles that a movie's budget and scores play in determining its revenue, confirming the intuitive expectation that films with higher budgets and superior scores likely indicative of better quality or more favorable reviews tend to achieve greater financial success. However, the investigation into the thematic elements, as denoted by the keywords "young," "life," and "new," reveals a lack of statistical significance, suggesting these specific terms do not directly impact movie revenue when budget, release year, and score are accounted for. This finding posits that the themes suggested by these words may not be potent determinants of a movie's financial outcome, or their effects might be moderated by other unexamined variables.
 
-### word association
+### Word Association
 
 Associations between the term "life" and other words in the **`overview`** are examined. A bar chart is then created to visualize the strength of these associations.
 
@@ -449,7 +484,9 @@ fig <- fig %>% layout(title = 'Term Frequencies in $life Theme',
 fig
 ```
 
-## Geographical
+The results from examining how "life" is discussed in your collection of texts show fascinating links between "life" and a variety of terms such as "laura," "acclaimed," "thirtyyearold," "unapologetic," "void," "iterations," "laura’s," and "andrea," with connection strengths noted between 0.25 to 0.28. This pattern hints that conversations or stories about "life" in your texts often include these specific words, potentially signaling a focus on personal tales, self-reflection, and possibly the experiences of distinct individuals like Laura. The occurrence of descriptors like "acclaimed" and "unapologetic" in proximity to "life" may suggest that these stories about life are widely recognized or delve into themes of genuine self-expression and discovery. This examination offers a deeper insight into the way "life" is woven into your texts, highlighting the depth of stories that delve into the intricacies of life and the characters embarking on these journeys.
+
+## Geographical data analysis using Leaflet:
 
 Geospatial analysis is performed to visualize the data on a world map. Two types of visualizations are created: a heatmap and cluster markers, both providing geographical insights into the dataset.
 
@@ -464,7 +501,6 @@ world_map <- map_data("world")
 country_coords <- world_map %>%
   group_by(region) %>%
   summarize(lat = mean(lat), lon = mean(long), .groups = 'drop')
-
 
 # Merge the coordinates
 final_dataset <- merge(final_dataset, country_coords, by.x = "country_name", by.y = "region", all.x = TRUE)
@@ -513,6 +549,10 @@ leaflet(data = final_dataset) %>%
 
 Visualizations are created to glean insights from the **`final_dataset`**. These include interactive plots for revenue by country, distribution of shows by genre, average scores by original language, and a scatter plot of budget versus revenue.
 
+### Total revenue by Country
+
+The bar chart displays total revenue by country, with Australia (AU) showing the highest revenue, represented by a prominent bar on the far left. The revenue figures are presented on a logarithmic scale, which means each increment on the y-axis represents a tenfold increase in revenue. This scale is useful for displaying data that varies exponentially, as it allows for easier visual comparisons between values that differ by orders of magnitude.
+
 ```{r}
 
 # Sum revenue by country
@@ -528,6 +568,13 @@ interactive_plot <- plot_ly(data = revenue_by_country, x = ~country_name, y = ~t
          yaxis = list(title = 'Total Revenue (Log Scale)', type = 'log'))
 interactive_plot
 
+```
+
+### Distribution of shows by Genre
+
+This visual presents the number of shows across various genres. The bars represent the count of shows in each genre, offering a clear comparison of their popularity or prevalence within the dataset.This visual representation helps stakeholders quickly gauge which genres are most common and might be driving viewership or production focus. It could inform decisions in content creation, marketing strategies, or market analysis.
+
+```{r}
 #Shows by Genre
 genre_counts <- final_dataset %>%
   separate_rows(genre, sep = ",") %>%
@@ -544,6 +591,14 @@ interactive_bar_chart
 plot_ly(data = genre_counts, labels = ~genre, values = ~n, type = 'pie') %>%
   layout(title = 'Distribution of Shows by Genre')
 
+
+```
+
+### Line chart showing Average score of each movie language
+
+This line chart displays the average scores of shows categorized by their original language. The vertical axis represents the average score, while the horizontal axis lists various languages. The average score can be influenced by the number of shows in each language category and the diversity of genres within each language. This data could be useful for content providers looking to understand audience preferences related to language or for market analysis focused on content performance across different linguistic markets.
+
+```{r}
 # avg score by language
 avg_score_by_lang <- final_dataset %>%
   group_by(orig_lang) %>%
@@ -556,9 +611,41 @@ plot_ly(data = avg_score_by_lang, x = ~orig_lang, y = ~average_score, type = 'sc
          yaxis = list(title = 'Average Score'))
 
 
+
+```
+
+### Scatter plot between Budget and Revenue
+
+This scatter plot illustrates the relationship between the budget and revenue of various films. The horizontal axis represents the budget, while the vertical axis shows the revenue. There seems to be a general trend where films with higher budgets also tend to have higher revenues. This is evident from the spread of points trending upwards as we move right along the budget axis. This kind of analysis can be particularly valuable for film producers and investors looking to understand the potential return on investment and to make informed decisions about budget allocations for future projects. It can also prompt further investigation into what other factors contribute to a film's commercial success.
+
+```{r}
 #scatter plot Budget vs Revenue
 plot_ly(data = final_dataset, x = ~budget_x, y = ~revenue, type = 'scatter', mode = 'markers') %>%
   layout(title = 'Budget vs. Revenue',
          xaxis = list(title = 'Budget'),
          yaxis = list(title = 'Revenue'))
 ```
+
+## Conclusion
+
+The production budgets and scores are significant predictors of a movie's revenue potential, which can guide financial investment strategies in the film industry. Despite their cultural value, thematic elements within movie descriptions do not show a direct correlation with financial success. Advanced statistical models such as GLM, GAM, and Random Forest elucidate the intricate factors driving a film's market performance, emphasizing the role of data-driven decision-making in shaping effective entertainment business strategies.
+
+## Bibliography
+
+Datasets:
+
+1.  IMDB Movies dataset: <https://www.kaggle.com/code/nandhirajak/movie-recommendation-system>
+2.  Netflix movies dataset: <https://www.kaggle.com/datasets/shivamb/netflix-shows>
+3.  Disney plus movies dataset: <https://www.kaggle.com/datasets/shivamb/disney-movies-and-tv-shows>
+
+CRAN (n.d.). *CRAN - Available Packages by Name*. Available at: <https://cran.r-project.org/web/packages/available_packages_by_name.html> \[Accessed 1 April 2024\].
+
+Leaflet (n.d.). *Leaflet: An Open-Source JavaScript Library for Mobile-Friendly Interactive Maps*. Available at: <https://leafletjs.com/> \[Accessed 1 April 2024\].
+
+Quarto (n.d.). *Quarto: An Open-Source Scientific and Technical Publishing System Built on Pandoc*. Available at: <https://quarto.org/> \[Accessed 1 April 2024\].
+
+R Core Team (n.d.). *R: The R Project for Statistical Computing*. Available at: <https://www.r-project.org/> \[Accessed 1 April 2024\].
+
+Silge, J. and Robinson, D. (n.d.). *Text Mining with R: A Tidy Approach*. Available at: <https://www.tidytextmining.com/> \[Accessed 1 April 2024\].
+
+Wickham, H. (n.d.). *ggplot2: Elegant Graphics for Data Analysis*. Available at: <https://ggplot2.tidyverse.org/> \[Accessed 1 April 2024\].
