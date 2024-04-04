@@ -1,19 +1,32 @@
 ---
-title: "R Assignment 3"
+title: "Analyzing the Dynamics of Film Revenue: A Statistical Approach"
+title-block-banner: images/banner.jpeg
+date: 2024-04-04
 author: "Shashanka Jagadeesh: 23101892"
 format:
   html:
-    toc: true
     html-math-method: katex
-    css: styles.css
+    embed-resources: true
+    toc: true
+    toc-expand: 2
+    toc-title: Contents
+    toc-depth: 3
 editor: visual
 code-fold: true
 theme: cyborg
+bibliography: References.bib
+nocite: '@*'
 ---
+
+**Business Implication**
+How can filmmakers and distributors leverage insights from statistical analyses of budget, scores, and content themes to strategize for higher box office returns?
+---
+
+![](UoG symbol.jpg){width="697"}
 
 ## Libraries
 
-The below code chunk is used to install and load the necessary R packages for data manipulation, visualization, and analysis. It ensures that all required libraries are available for use in the subsequent analyses.
+The below code chunk is used to install and load the necessary R packages for data manipulation, visualization, and analysis. It ensures that all required libraries are available for use in the subsequent analyses. @CRANPackages
 
 ```{r message=FALSE, warning=FALSE, results='asis'}
 options(repos = c(CRAN = "https://cran.rstudio.com/"))
@@ -53,18 +66,18 @@ library(stats)
 
 ## Loading all datasets
 
-Here, datasets are loaded into R from the specified paths. Each dataset corresponds to a different source of movie titles.
+Here, datasets are loaded into R from the specified paths. Each dataset corresponds to a different source of movie titles. [@IMDBMoviesDataset; @NetflixMoviesDataset; @DisneyPlusMoviesDataset]
 
 ```{r}
-disney_plus_titles <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/netflix_titles.csv", fileEncoding = "UTF-8")
-netflix_titles <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/disney_plus_titles.csv", fileEncoding = "UTF-8")
-imdb_movies <- read.csv("C:/Users/PC/Documents/Assignments/R programming/Assignment 2/Datasets/imdb_movies.csv", fileEncoding = "UTF-8")
+disney_plus_titles <- read.csv("C:/Users/PC/Documents/GitHub/RAssignment/netflix_titles.csv", fileEncoding = "UTF-8")
+netflix_titles <- read.csv("C:/Users/PC/Documents/GitHub/RAssignment/disney_plus_titles.csv", fileEncoding = "UTF-8")
+imdb_movies <- read.csv("C:/Users/PC/Documents/GitHub/RAssignment/imdb_movies.csv", fileEncoding = "UTF-8")
 
 ```
 
 ## Mermaid
 
-This Mermaid diagram provides a visual flowchart of how the datasets will be merged. It outlines the keys and columns in each dataset, leading to the formation of the final dataset.
+This Mermaid diagram provides a visual flowchart of how the datasets will be merged. It outlines the keys and columns in each dataset, leading to the formation of the final dataset. @Mermaid
 
 ```{mermaid}
 graph TD;
@@ -210,13 +223,17 @@ postResample(pred = predictions, obs = test_data$revenue)
 glm_metrics <- postResample(pred = predictions, obs = test_data$revenue)
 rmse_glm <- glm_metrics[1]
 rsq_glm <- glm_metrics[2]
+
+cat("GLM Accuracy (R-Squared):", round(glm_metrics['Rsquared'] * 100, 2), "%\n")
+cat("GLM RMSE:", round(glm_metrics['RMSE'], 2), "\n")
+
 ```
 
-The model's RMSE (Root Mean Square Error) is quite high, which might indicate that the model's predictions are not very close to the actual values on average, potentially due to the high variance of movie revenues. The **`R-squared`** value is approximately **`0.565`**, which means that around 56.5% of the variability in revenue is explained by the model.
+The model's RMSE (Root Mean Square Error) is quite high, which might indicate that the model's predictions are not very close to the actual values on average, potentially due to the high variance of movie revenues. The **`R-squared`** value is approximately **`0.565`**, which means that around 56.5% of the variability in revenue is explained by the model. @McCullaghNelder1989
 
 ### GAM Regression model
 
-While GAMs offer flexibility, they also provide interpretability. The summary output of the GAM model will show the estimated smooth functions for each predictor variable, allowing to understand how each variable influences the response (revenue) nonlinearly. GAM allows for the modeling of nonlinear relationships through smooth functions, which can capture more complex relationships between variables.
+While GAMs offer flexibility, they also provide interpretability. The summary output of the GAM model will show the estimated smooth functions for each predictor variable, allowing to understand how each variable influences the response (revenue) nonlinearly. GAM allows for the modeling of nonlinear relationships through smooth functions, which can capture more complex relationships between variables. @HastieTibshirani1990
 
 ```{r}
 
@@ -242,11 +259,15 @@ test_data$predicted_revenue <- predictions
 rmse <- sqrt(mean((test_data$revenue - test_data$predicted_revenue)^2))
 cat("RMSE:", rmse, "\n")
 
-postResample(pred = predictions, obs = test_data$revenue)
 
 gam_metrics <- postResample(pred = predictions, obs = test_data$revenue)
 rmse_gam <- gam_metrics[1]
 rsq_gam <- gam_metrics[2]
+
+
+cat("GAM Accuracy (R-Squared):", round(gam_metrics['Rsquared'] * 100, 2), "%\n")
+cat("GAM RMSE:", round(gam_metrics['RMSE'], 2), "\n")
+
 ```
 
 The significance of the smooth terms for **`budget_x`** and **`score`** indicates that these variables have important nonlinear effects on revenue, which the GAM is capturing. The model's predictive performance is reasonable, but as with many real-world scenarios, there is room for improvement, likely due to the complex factors driving movie revenues beyond what's captured in the model.
@@ -271,13 +292,13 @@ test_data$predicted_revenue_enhanced <- predictions_enhanced
 rmse_enhanced <- sqrt(mean((test_data$revenue - test_data$predicted_revenue_enhanced)^2))
 cat("Enhanced Model RMSE:", rmse_enhanced, "\n")
 
-# Visualizing the effects of the predictors (using the training data model fit)
-par(mfrow=c(3,1))
-plot(gam_model_enhanced, pages=1)
 
 gam_enhanced_metrics <- postResample(pred = predictions_enhanced, obs = test_data$revenue)
 rmse_gam_enhanced <- gam_enhanced_metrics[1]
 rsq_gam_enhanced <- gam_enhanced_metrics[2]
+
+cat("Enhanced Model RMSE:", rmse_enhanced, "\n")
+cat("Enhanced Model R-squared:", rsq_gam_enhanced, "\n")
 ```
 
 The second iteration of the GAM has improved the model's explanatory power and predictive accuracy. The inclusion of logged budget values and an interaction term appears to provide a better understanding of how budget and score together influence movie revenue.
@@ -336,9 +357,27 @@ interactive_plot
 rf_metrics <- postResample(pred = predictions, obs = test_data$revenue)
 rmse_rf <- rf_metrics[1]
 rsq_rf <- rf_metrics[2]
+
+
+cat("Random Forest Accuracy (R-Squared):", round(rf_metrics['Rsquared'] * 100, 2), "%\n")
+cat("Random Forest RMSE:", round(rf_metrics['RMSE'], 2), "\n")
+
 ```
 
 From this we see that budget is the strongest predictor among the variables used. The variance explained by the model is quite high for such a complex target variable as movie revenue, but the large RMSE indicates that there is still considerable error in the predictions, which is not uncommon in predicting financial figures due to their high variability and influence by many factors not captured in the model.
+
+## Summarizing Regression Analysis
+
+```{r}
+# summary table
+accuracy_summary <- data.frame(
+  Model = c("GLM", "GAM", "GAM 2nd Iteration", "Random Forest"),
+  RMSE = c(rmse_glm, rmse_gam, rmse_gam_enhanced, rmse_rf),
+  R_Squared = c(rsq_glm, rsq_gam, rsq_gam_enhanced, rsq_rf)
+)
+
+print(accuracy_summary)
+```
 
 ## Classification and Confusion Matrix
 
@@ -381,22 +420,11 @@ print(confMatrix)
 
 Random Forest classification model demonstrates good performance in distinguishing between the two revenue classes. The ROC value is quite high, suggesting that the model has a strong ability to discriminate between 'High' and 'Low' revenue movies. However, there is a trade-off between sensitivity and specificity as **`mtry`** changes, which is common in classification tasks. The model performs better at identifying 'High' revenue movies (as indicated by higher sensitivity) when **`mtry`** is set to 13.
 
-```{r}
-# summary table
-accuracy_summary <- data.frame(
-  Model = c("GLM", "GAM", "GAM 2nd Iteration", "Random Forest"),
-  RMSE = c(rmse_glm, rmse_gam, rmse_gam_enhanced, rmse_rf),
-  R_Squared = c(rsq_glm, rsq_gam, rsq_gam_enhanced, rsq_rf)
-)
-
-print(accuracy_summary)
-```
-
 ## Qualitative analysis
 
 ### Wordcloud
 
-A word cloud is generated to visualize the most common words in the **`overview`** column of the dataset. This qualitative analysis can give insights into prevalent themes or topics.
+A word cloud is generated to visualize the most common words in the **`overview`** column of the dataset. This qualitative analysis can give insights into prevalent themes or topics. @TidyTextMining
 
 ```{r warning=FALSE}
 corpus <- Corpus(VectorSource(final_dataset$overview))
@@ -418,7 +446,7 @@ wordcloud(words = word_freqs_df$word, freq = word_freqs_df$freq, min.freq = 1,
           colors = brewer.pal(8, "Dark2"), main = "Most Common Words in Movie Overviews")
 ```
 
-### How do budget, critical scores, and thematic elements within movie overviews influence a film's revenue, and what insights can this provide to filmmakers and marketers for optimizing financial success?
+### Impact of budget, critical scores, and use of specific words in the overview on a film's revenue
 
 ```{r}
 analysis_dataset <- final_dataset[, c("revenue", "budget_x", "release_year", "score", "overview")]
@@ -488,7 +516,7 @@ The results from examining how "life" is discussed in your collection of texts s
 
 ## Geographical data analysis using Leaflet:
 
-Geospatial analysis is performed to visualize the data on a world map. Two types of visualizations are created: a heatmap and cluster markers, both providing geographical insights into the dataset.
+Geospatial analysis is performed to visualize the data on a world map. Two types of visualizations are created: a heatmap and cluster markers, both providing geographical insights into the dataset. @Leaflet
 
 ```{r warning=FALSE}
 # Convert ISO country codes to country names
@@ -629,23 +657,3 @@ plot_ly(data = final_dataset, x = ~budget_x, y = ~revenue, type = 'scatter', mod
 ## Conclusion
 
 The production budgets and scores are significant predictors of a movie's revenue potential, which can guide financial investment strategies in the film industry. Despite their cultural value, thematic elements within movie descriptions do not show a direct correlation with financial success. Advanced statistical models such as GLM, GAM, and Random Forest elucidate the intricate factors driving a film's market performance, emphasizing the role of data-driven decision-making in shaping effective entertainment business strategies.
-
-## Bibliography
-
-Datasets:
-
-1.  IMDB Movies dataset: <https://www.kaggle.com/code/nandhirajak/movie-recommendation-system>
-2.  Netflix movies dataset: <https://www.kaggle.com/datasets/shivamb/netflix-shows>
-3.  Disney plus movies dataset: <https://www.kaggle.com/datasets/shivamb/disney-movies-and-tv-shows>
-
-CRAN (n.d.). *CRAN - Available Packages by Name*. Available at: <https://cran.r-project.org/web/packages/available_packages_by_name.html> \[Accessed 1 April 2024\].
-
-Leaflet (n.d.). *Leaflet: An Open-Source JavaScript Library for Mobile-Friendly Interactive Maps*. Available at: <https://leafletjs.com/> \[Accessed 1 April 2024\].
-
-Quarto (n.d.). *Quarto: An Open-Source Scientific and Technical Publishing System Built on Pandoc*. Available at: <https://quarto.org/> \[Accessed 1 April 2024\].
-
-R Core Team (n.d.). *R: The R Project for Statistical Computing*. Available at: <https://www.r-project.org/> \[Accessed 1 April 2024\].
-
-Silge, J. and Robinson, D. (n.d.). *Text Mining with R: A Tidy Approach*. Available at: <https://www.tidytextmining.com/> \[Accessed 1 April 2024\].
-
-Wickham, H. (n.d.). *ggplot2: Elegant Graphics for Data Analysis*. Available at: <https://ggplot2.tidyverse.org/> \[Accessed 1 April 2024\].
