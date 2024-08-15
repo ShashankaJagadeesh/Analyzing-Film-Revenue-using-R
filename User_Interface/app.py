@@ -38,7 +38,7 @@ def hash_password(password):
 # Loading the model using joblib
 @st.cache_resource
 def load_model():
-    model = joblib.load('D:\\AI_Detector_New\\human_AI_classifier_model.joblib')
+    model = joblib.load('human_AI_classifier_model.joblib')
     return model
 
 model = load_model()
